@@ -29,10 +29,14 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: time.Second * 2,
 	}
-	req, err := http.NewRequest("GET", "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/1", nil)
+	fetch("https://s3-eu-west-1.amazonaws.com/test-golang-recipes/1", httpClient)
+}
+
+func fetch(url string, client *http.Client) {
+	req, err := http.NewRequest("GET", url, nil)
 	check(err)
 	req.Header.Set("User-Agent", "hellofresh")
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(req)
 	check(err)
 	body, err := ioutil.ReadAll(resp.Body)
 	check(err)
