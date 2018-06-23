@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"time"
 )
 
 type Recipe struct {
@@ -23,7 +24,15 @@ type Recipe struct {
 }
 
 func main() {
-	resp, err := http.Get("https://s3-eu-west-1.amazonaws.com/test-golang-recipes/1")
+	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
+	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+	httpClient := &http.Client{
+		Timeout: time.Second * 2,
+	}
+	req, err := http.NewRequest("GET", "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/1", nil)
+	check(err)
+	req.Header.Set("User-Agent", "hellofresh")
+	resp, err := httpClient.Do(req)
 	check(err)
 	body, err := ioutil.ReadAll(resp.Body)
 	check(err)
