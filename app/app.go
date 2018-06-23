@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -29,10 +30,30 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: time.Second * 2,
 	}
-	fetch("https://s3-eu-west-1.amazonaws.com/test-golang-recipes/1", httpClient)
+	var recipes []Recipe
+	c := make(chan Recipe)
+	timeout := time.After(2 * time.Second)
+	for i := 1; i < 5; i++ {
+		go (func(i int) {
+			c <- fetch("https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"+strconv.Itoa(i), httpClient)
+		})(i)
+	}
+	for i := 0; i < 4; i++ {
+		select {
+		case recipe := <-c:
+			recipes = append(recipes, recipe)
+		case <-timeout:
+			fmt.Println("timeout")
+			return
+		}
+		/*recipe := <-c
+		recipes = append(recipes, recipe)*/
+	}
+	fmt.Println(recipes)
 }
 
-func fetch(url string, client *http.Client) {
+func fetch(url string, client *http.Client) Recipe {
+	fmt.Println(url)
 	req, err := http.NewRequest("GET", url, nil)
 	check(err)
 	req.Header.Set("User-Agent", "hellofresh")
@@ -43,7 +64,7 @@ func fetch(url string, client *http.Client) {
 	var recipe Recipe
 	err = json.Unmarshal(body, &recipe)
 	check(err)
-	fmt.Println(recipe)
+	return recipe
 }
 
 func check(err error) {
