@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -34,9 +35,23 @@ type Recipe struct {
 	} `json:"ingredients"`
 }
 
+type ByPrepTime []Recipe
+
 func main() {
 	http.HandleFunc("/recipes", ReverseAggregatorProxy)
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func (p ByPrepTime) Len() int {
+	return len(p)
+}
+
+func (p ByPrepTime) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (p ByPrepTime) Less(i, j int) bool {
+	return p[i].PrepTime < p[j].PrepTime
 }
 
 func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
@@ -103,6 +118,7 @@ func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 		/*recipe := <-c
 		recipes = append(recipes, recipe)*/
 	}
+	sort.Sort(ByPrepTime(recipes))
 	return recipes
 }
 
