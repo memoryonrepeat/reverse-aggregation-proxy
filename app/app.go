@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
+	// "os"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,10 +15,12 @@ import (
 )
 
 const (
-	MAX_TOP      = 10
-	DEFAULT_TOP  = 5
-	DEFAULT_SKIP = 0
-	BASE_URL     = "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"
+	MAX_TOP         = 10
+	DEFAULT_TOP     = 5
+	DEFAULT_SKIP    = 0
+	BASE_URL        = "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"
+	REQUEST_TIMEOUT = 2
+	CLIENT_TIMEOUT  = 10
 )
 
 type Recipe struct {
@@ -88,47 +90,46 @@ func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
 	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
 	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 	httpClient := &http.Client{
-		Timeout: time.Second * 2,
+		Timeout: time.Second * CLIENT_TIMEOUT,
 	}
-	var r []Recipe
+	var recipe []Recipe
 	if len(req.URL.Query()["ids"]) > 0 {
-		r = AggregatedRecipeHandler(req, httpClient)
+		recipe = AggregatedRecipeHandler(req, httpClient)
 	} else {
-		r = AllRecipeHandler(req, httpClient)
+		recipe = AllRecipeHandler(req, httpClient)
 	}
-	j, e := json.Marshal(r)
-	check(e)
-	io.WriteString(w, string(j))
+	obj, err := json.Marshal(recipe)
+	checkError(err)
+	io.WriteString(w, string(obj))
 }
 
 func fetchSingleRecipe(url string, client *http.Client) Recipe {
-	fmt.Println(url)
 	req, err := http.NewRequest("GET", url, nil)
-	check(err)
+	checkError(err)
 	req.Header.Set("User-Agent", "hellofresh")
 	resp, err := client.Do(req)
+	checkError(err)
+	fmt.Println("URL:", url, "|| Status Code:", resp.StatusCode)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return Recipe{}
 	}
-	fmt.Println("HTTP Response Status:", resp.StatusCode, "||", http.StatusText(resp.StatusCode))
-	check(err)
 	body, err := ioutil.ReadAll(resp.Body)
-	check(err)
+	checkError(err)
 	var recipe Recipe
 	err = json.Unmarshal(body, &recipe)
-	check(err)
+	checkError(err)
 	return recipe
 }
 
 func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
 	var recipes []Recipe
+
 	c := make(chan Recipe)
 
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(REQUEST_TIMEOUT * time.Second)
 
 	for _, id := range *ids {
 		go (func(id string) {
-			fmt.Println(id)
 			c <- fetchSingleRecipe(BASE_URL+id, client)
 		})(id)
 	}
@@ -139,18 +140,15 @@ func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
 				recipes = append(recipes, recipe)
 			}
 		case <-timeout:
-			fmt.Println("timeout", id)
-			// return recipes
+			fmt.Println("A request timed out", id)
 		}
-		/*recipe := <-c
-		recipes = append(recipes, recipe)*/
 	}
 	return recipes
 }
 
-func check(err error) {
+func checkError(err error) {
 	if err != nil {
-		fmt.Println("bug", err)
-		os.Exit(1)
+		fmt.Println(err)
+		// os.Exit(1)
 	}
 }
