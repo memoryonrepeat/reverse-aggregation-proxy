@@ -73,7 +73,9 @@ func fetch(top int, skip int, client *http.Client) []Recipe {
 	for i := skip; i < (top + skip); i++ {
 		select {
 		case recipe := <-c:
-			recipes = append(recipes, recipe)
+			if recipe.Id != "" {
+				recipes = append(recipes, recipe)
+			}
 		case <-timeout:
 			fmt.Println("timeout")
 			// return recipes
@@ -90,6 +92,10 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	check(err)
 	req.Header.Set("User-Agent", "hellofresh")
 	resp, err := client.Do(req)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return Recipe{}
+	}
+	fmt.Println("HTTP Response Status:", resp.StatusCode, "||", http.StatusText(resp.StatusCode))
 	check(err)
 	body, err := ioutil.ReadAll(resp.Body)
 	check(err)
@@ -101,7 +107,7 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 
 func check(err error) {
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("bug", err)
 		os.Exit(1)
 	}
 }
