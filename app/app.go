@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const MAX_TOP = 10
+
 type Recipe struct {
 	Id          string `json:"id"`
 	Name        string `json:"name"`
@@ -36,6 +38,9 @@ func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
 	skip := 0
 	if len(req.URL.Query()["top"]) > 0 {
 		top, _ = strconv.Atoi(req.URL.Query()["top"][0])
+		if top > MAX_TOP {
+			top = MAX_TOP
+		}
 	}
 	if len(req.URL.Query()["skip"]) > 0 {
 		skip, _ = strconv.Atoi(req.URL.Query()["skip"][0])
