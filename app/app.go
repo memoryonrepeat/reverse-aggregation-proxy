@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,7 @@ const (
 	MAX_TOP      = 10
 	DEFAULT_TOP  = 5
 	DEFAULT_SKIP = 0
+	BASE_URL     = "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"
 )
 
 type Recipe struct {
@@ -37,7 +39,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
+func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	top := DEFAULT_TOP
 	skip := DEFAULT_SKIP
 	if len(req.URL.Query()["top"]) > 0 {
@@ -49,25 +51,14 @@ func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
 	if len(req.URL.Query()["skip"]) > 0 {
 		skip, _ = strconv.Atoi(req.URL.Query()["skip"][0])
 	}
-	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
-	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-	httpClient := &http.Client{
-		Timeout: time.Second * 2,
-	}
-	r := fetch(top, skip, httpClient)
-	j, e := json.Marshal(r)
-	check(e)
-	io.WriteString(w, string(j))
-}
 
-func fetch(top int, skip int, client *http.Client) []Recipe {
 	var recipes []Recipe
 	c := make(chan Recipe)
 	timeout := time.After(2 * time.Second)
 
 	for i := skip; i < (top + skip); i++ {
 		go (func(i int) {
-			c <- fetchSingleRecipe("https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"+strconv.Itoa(i+1), client)
+			c <- fetchSingleRecipe(BASE_URL+strconv.Itoa(i+1), client)
 		})(i)
 	}
 	for i := skip; i < (top + skip); i++ {
@@ -84,6 +75,54 @@ func fetch(top int, skip int, client *http.Client) []Recipe {
 		recipes = append(recipes, recipe)*/
 	}
 	return recipes
+}
+
+func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
+	ids := strings.Split(req.URL.Query()["ids"][0], ",")
+	var recipes []Recipe
+	c := make(chan Recipe)
+
+	timeout := time.After(2 * time.Second)
+
+	for _, id := range ids {
+		go (func(id string) {
+			fmt.Println(id)
+			c <- fetchSingleRecipe(BASE_URL+id, client)
+		})(id)
+	}
+	for _, id := range ids {
+		select {
+		case recipe := <-c:
+			if recipe.Id != "" {
+				recipes = append(recipes, recipe)
+			}
+		case <-timeout:
+			fmt.Println("timeout", id)
+			// return recipes
+		}
+		/*recipe := <-c
+		recipes = append(recipes, recipe)*/
+	}
+	return recipes
+}
+
+// Should redirect to AllRecipeHandler / AggregatedRecipeHandler
+func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
+
+	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
+	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+	httpClient := &http.Client{
+		Timeout: time.Second * 2,
+	}
+	var r []Recipe
+	if len(req.URL.Query()["ids"]) > 0 {
+		r = AggregatedRecipeHandler(req, httpClient)
+	} else {
+		r = AllRecipeHandler(req, httpClient)
+	}
+	j, e := json.Marshal(r)
+	check(e)
+	io.WriteString(w, string(j))
 }
 
 func fetchSingleRecipe(url string, client *http.Client) Recipe {
