@@ -67,57 +67,17 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 		skip, _ = strconv.Atoi(req.URL.Query()["skip"][0])
 	}
 
-	var recipes []Recipe
-	c := make(chan Recipe)
-	timeout := time.After(2 * time.Second)
-
-	for i := skip; i < (top + skip); i++ {
-		go (func(i int) {
-			c <- fetchSingleRecipe(BASE_URL+strconv.Itoa(i+1), client)
-		})(i)
+	ids := make([]string, top)
+	for i := range ids {
+		ids[i] = strconv.Itoa(i + skip + 1)
 	}
-	for i := skip; i < (top + skip); i++ {
-		select {
-		case recipe := <-c:
-			if recipe.Id != "" {
-				recipes = append(recipes, recipe)
-			}
-		case <-timeout:
-			fmt.Println("timeout")
-			// return recipes
-		}
-		/*recipe := <-c
-		recipes = append(recipes, recipe)*/
-	}
+	recipes := fetchRecipeList(&ids, client)
 	return recipes
 }
 
 func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	ids := strings.Split(req.URL.Query()["ids"][0], ",")
-	var recipes []Recipe
-	c := make(chan Recipe)
-
-	timeout := time.After(2 * time.Second)
-
-	for _, id := range ids {
-		go (func(id string) {
-			fmt.Println(id)
-			c <- fetchSingleRecipe(BASE_URL+id, client)
-		})(id)
-	}
-	for _, id := range ids {
-		select {
-		case recipe := <-c:
-			if recipe.Id != "" {
-				recipes = append(recipes, recipe)
-			}
-		case <-timeout:
-			fmt.Println("timeout", id)
-			// return recipes
-		}
-		/*recipe := <-c
-		recipes = append(recipes, recipe)*/
-	}
+	recipes := fetchRecipeList(&ids, client)
 	sort.Sort(ByPrepTime(recipes))
 	return recipes
 }
@@ -158,6 +118,34 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	err = json.Unmarshal(body, &recipe)
 	check(err)
 	return recipe
+}
+
+func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
+	var recipes []Recipe
+	c := make(chan Recipe)
+
+	timeout := time.After(2 * time.Second)
+
+	for _, id := range *ids {
+		go (func(id string) {
+			fmt.Println(id)
+			c <- fetchSingleRecipe(BASE_URL+id, client)
+		})(id)
+	}
+	for _, id := range *ids {
+		select {
+		case recipe := <-c:
+			if recipe.Id != "" {
+				recipes = append(recipes, recipe)
+			}
+		case <-timeout:
+			fmt.Println("timeout", id)
+			// return recipes
+		}
+		/*recipe := <-c
+		recipes = append(recipes, recipe)*/
+	}
+	return recipes
 }
 
 func check(err error) {
