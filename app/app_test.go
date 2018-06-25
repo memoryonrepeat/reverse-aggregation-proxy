@@ -1,10 +1,40 @@
 package main
 
 import (
-	/*"net/http"
-	"reflect"*/
+	// "net/http"
+	"reflect"
+	"strconv"
 	"testing"
 )
+
+func TestFilter(t *testing.T) {
+	type args struct {
+		input []string
+		f     func(string) bool
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{
+			"Filter out non-positive non-int strings", args{
+				[]string{"a", "a1", "1", "-1", "2", "1a"},
+				func(s string) bool {
+					val, _ := strconv.Atoi(s)
+					return val > 0
+				},
+			}, []string{"1", "2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Filter(tt.args.input, tt.args.f); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Filter() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestByPrepTime_Len(t *testing.T) {
 	tests := []struct {
