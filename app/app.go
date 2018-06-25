@@ -68,12 +68,18 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	skip := config.DefaultSkip
 	if len(req.URL.Query()["top"]) > 0 {
 		top, _ = strconv.Atoi(req.URL.Query()["top"][0])
+		if top < 0 {
+			top = 0
+		}
 		if top > config.MaxTop {
 			top = config.MaxTop
 		}
 	}
 	if len(req.URL.Query()["skip"]) > 0 {
 		skip, _ = strconv.Atoi(req.URL.Query()["skip"][0])
+		if skip < 0 {
+			skip = config.DefaultSkip
+		}
 	}
 
 	ids := make([]string, top)
@@ -86,7 +92,11 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 
 // Fetch recipes with given ids
 func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
-	ids := strings.Split(req.URL.Query()["ids"][0], ",")
+	// ids := strings.Split(req.URL.Query()["ids"][0], ",")
+	ids := Filter(strings.Split(req.URL.Query()["ids"][0], ","), func(s string) bool {
+		val, _ := strconv.Atoi(s)
+		return val > 0
+	})
 	recipes := fetchRecipeList(&ids, client)
 	sort.Sort(ByPrepTime(recipes))
 	return recipes
@@ -154,6 +164,16 @@ func (p ByPrepTime) Less(i, j int) bool {
 	di, _ := time.ParseDuration(strings.ToLower(p[i].PrepTime[2:]))
 	dj, _ := time.ParseDuration(strings.ToLower(p[j].PrepTime[2:]))
 	return di < dj
+}
+
+func Filter(input []string, f func(string) bool) []string {
+	output := make([]string, 0)
+	for _, val := range input {
+		if f(val) {
+			output = append(output, val)
+		}
+	}
+	return output
 }
 
 func checkError(err error) {
