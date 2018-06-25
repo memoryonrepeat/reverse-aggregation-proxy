@@ -37,7 +37,7 @@ func main() {
 
 // Redirects the request to AllRecipeHandler / AggregatedRecipeHandler
 func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
-
+	log.Println("Incoming request", req.URL)
 	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
 	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
 	httpClient := &http.Client{
@@ -50,7 +50,13 @@ func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
 		recipe = AllRecipeHandler(req, httpClient)
 	}
 	obj, err := json.Marshal(recipe)
-	checkError(err)
+	if err != nil {
+		log.Println("Request error", req.URL, err)
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		log.Println("Request fulfilled", req.URL)
+		w.WriteHeader(http.StatusOK)
+	}
 	io.WriteString(w, string(obj))
 }
 
@@ -119,7 +125,7 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	req.Header.Set("User-Agent", "hellofresh")
 	resp, err := client.Do(req)
 	checkError(err)
-	log.Println("URL:", url, "|| Status Code:", resp.StatusCode)
+	log.Println(url, "|| Status Code:", resp.StatusCode)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return Recipe{}
 	}
