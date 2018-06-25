@@ -1,6 +1,7 @@
 package main
 
 import (
+	config "./config"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,15 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-)
-
-const (
-	MAX_TOP         = 10
-	DEFAULT_TOP     = 5
-	DEFAULT_SKIP    = 0
-	BASE_URL        = "https://s3-eu-west-1.amazonaws.com/test-golang-recipes/"
-	REQUEST_TIMEOUT = 2
-	CLIENT_TIMEOUT  = 10
 )
 
 type Recipe struct {
@@ -44,25 +36,35 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func (p ByPrepTime) Len() int {
-	return len(p)
+// Redirects the request to AllRecipeHandler / AggregatedRecipeHandler
+func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
+
+	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
+	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
+	httpClient := &http.Client{
+		Timeout: time.Second * config.ClientTimeout,
+	}
+	var recipe []Recipe
+	if len(req.URL.Query()["ids"]) > 0 {
+		recipe = AggregatedRecipeHandler(req, httpClient)
+	} else {
+		recipe = AllRecipeHandler(req, httpClient)
+	}
+	obj, err := json.Marshal(recipe)
+	checkError(err)
+	io.WriteString(w, string(obj))
 }
 
-func (p ByPrepTime) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p ByPrepTime) Less(i, j int) bool {
-	return p[i].PrepTime < p[j].PrepTime
-}
-
+// Handle all recipes use case
+// If pagination settings (top/skip) is not given, make them the default
+// Top parameter is bounded at some max constant to avoid overloading the recipe server
 func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
-	top := DEFAULT_TOP
-	skip := DEFAULT_SKIP
+	top := config.DefaultTop
+	skip := config.DefaultSkip
 	if len(req.URL.Query()["top"]) > 0 {
 		top, _ = strconv.Atoi(req.URL.Query()["top"][0])
-		if top > MAX_TOP {
-			top = MAX_TOP
+		if top > config.MaxTop {
+			top = config.MaxTop
 		}
 	}
 	if len(req.URL.Query()["skip"]) > 0 {
@@ -77,6 +79,7 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	return recipes
 }
 
+// Fetch recipes with given ids
 func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	ids := strings.Split(req.URL.Query()["ids"][0], ",")
 	recipes := fetchRecipeList(&ids, client)
@@ -84,25 +87,33 @@ func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	return recipes
 }
 
-// Should redirect to AllRecipeHandler / AggregatedRecipeHandler
-func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
+// Fetch all recipes in a given list using goroutines
+func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
+	var recipes []Recipe
 
-	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
-	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779
-	httpClient := &http.Client{
-		Timeout: time.Second * CLIENT_TIMEOUT,
+	c := make(chan Recipe)
+
+	timeout := time.After(config.RequestTimeout * time.Second)
+
+	for _, id := range *ids {
+		go (func(id string) {
+			c <- fetchSingleRecipe(config.BaseURL+id, client)
+		})(id)
 	}
-	var recipe []Recipe
-	if len(req.URL.Query()["ids"]) > 0 {
-		recipe = AggregatedRecipeHandler(req, httpClient)
-	} else {
-		recipe = AllRecipeHandler(req, httpClient)
+	for range *ids {
+		select {
+		case recipe := <-c:
+			if recipe.Id != "" {
+				recipes = append(recipes, recipe)
+			}
+		case <-timeout:
+			fmt.Println("A request timed out")
+		}
 	}
-	obj, err := json.Marshal(recipe)
-	checkError(err)
-	io.WriteString(w, string(obj))
+	return recipes
 }
 
+// Fetch a single URL
 func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	req, err := http.NewRequest("GET", url, nil)
 	checkError(err)
@@ -121,29 +132,19 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	return recipe
 }
 
-func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
-	var recipes []Recipe
+// Implement sort interface
+func (p ByPrepTime) Len() int {
+	return len(p)
+}
 
-	c := make(chan Recipe)
+// Implement sort interface
+func (p ByPrepTime) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
 
-	timeout := time.After(REQUEST_TIMEOUT * time.Second)
-
-	for _, id := range *ids {
-		go (func(id string) {
-			c <- fetchSingleRecipe(BASE_URL+id, client)
-		})(id)
-	}
-	for _, id := range *ids {
-		select {
-		case recipe := <-c:
-			if recipe.Id != "" {
-				recipes = append(recipes, recipe)
-			}
-		case <-timeout:
-			fmt.Println("A request timed out", id)
-		}
-	}
-	return recipes
+// Implement sort interface
+func (p ByPrepTime) Less(i, j int) bool {
+	return p[i].PrepTime < p[j].PrepTime
 }
 
 func checkError(err error) {
