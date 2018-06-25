@@ -149,8 +149,11 @@ func (p ByPrepTime) Swap(i, j int) {
 }
 
 // Implement sort interface
+// Units can be different so need to convert to duration to compare instead of compare lexicographically
 func (p ByPrepTime) Less(i, j int) bool {
-	return p[i].PrepTime < p[j].PrepTime
+	di, _ := time.ParseDuration(strings.ToLower(p[i].PrepTime[2:]))
+	dj, _ := time.ParseDuration(strings.ToLower(p[j].PrepTime[2:]))
+	return di < dj
 }
 
 func checkError(err error) {
