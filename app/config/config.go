@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+var Port = ":8080"
 var MaxTop = 10
 var DefaultTop = 5
 var DefaultSkip = 0

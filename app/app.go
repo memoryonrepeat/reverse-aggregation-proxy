@@ -3,12 +3,10 @@ package main
 import (
 	config "./config"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
-	// "os"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,6 +31,7 @@ type ByPrepTime []Recipe
 
 func main() {
 	http.HandleFunc("/recipes", ReverseAggregatorProxy)
+	log.Println("Server starting at port", config.Port)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -107,7 +106,7 @@ func fetchRecipeList(ids *[]string, client *http.Client) []Recipe {
 				recipes = append(recipes, recipe)
 			}
 		case <-timeout:
-			fmt.Println("A request timed out")
+			log.Println("A request timed out")
 		}
 	}
 	return recipes
@@ -120,7 +119,7 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	req.Header.Set("User-Agent", "hellofresh")
 	resp, err := client.Do(req)
 	checkError(err)
-	fmt.Println("URL:", url, "|| Status Code:", resp.StatusCode)
+	log.Println("URL:", url, "|| Status Code:", resp.StatusCode)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return Recipe{}
 	}
@@ -129,6 +128,7 @@ func fetchSingleRecipe(url string, client *http.Client) Recipe {
 	var recipe Recipe
 	err = json.Unmarshal(body, &recipe)
 	checkError(err)
+	defer resp.Body.Close()
 	return recipe
 }
 
@@ -149,7 +149,6 @@ func (p ByPrepTime) Less(i, j int) bool {
 
 func checkError(err error) {
 	if err != nil {
-		fmt.Println(err)
-		// os.Exit(1)
+		log.Println(err)
 	}
 }
