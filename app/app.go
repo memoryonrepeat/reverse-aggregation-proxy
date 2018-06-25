@@ -30,13 +30,13 @@ type Recipe struct {
 type ByPrepTime []Recipe
 
 func main() {
-	http.HandleFunc("/recipes", ReverseAggregatorProxy)
+	http.HandleFunc("/recipes", ReverseAggregatorProxyHandler)
 	log.Println("Server starting at port", config.Port)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
 // Redirects the request to AllRecipeHandler / AggregatedRecipeHandler
-func ReverseAggregatorProxy(w http.ResponseWriter, req *http.Request) {
+func ReverseAggregatorProxyHandler(w http.ResponseWriter, req *http.Request) {
 	log.Println("Incoming request", req.URL)
 	// Specify timeout to avoid apps to hang unexpecedly since there is no timeout by default
 	// https://medium.com/@nate510/don-t-use-go-s-default-http-client-4804cb19f779

@@ -1,11 +1,54 @@
 package main
 
 import (
-	// "net/http"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"strconv"
 	"testing"
 )
+
+func TestReverseAggregatorProxyHandler1(t *testing.T) {
+	req, err := http.NewRequest("GET", "/recipes", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ReverseAggregatorProxyHandler)
+	handler.ServeHTTP(rr, req)
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Status code: got %v want %v",
+			status, http.StatusOK)
+	}
+}
+
+func TestAllRecipeHandler1(t *testing.T) {
+	req, err := http.NewRequest("GET", "/recipes?top=10&skip=-5", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ReverseAggregatorProxyHandler)
+	handler.ServeHTTP(rr, req)
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Status code: got %v want %v",
+			status, http.StatusOK)
+	}
+}
+
+func TestAggregatedRecipeHandler2(t *testing.T) {
+	req, err := http.NewRequest("GET", "/recipes?ids=1,2,3a,-4", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(ReverseAggregatorProxyHandler)
+	handler.ServeHTTP(rr, req)
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Status code: got %v want %v",
+			status, http.StatusOK)
+	}
+}
 
 func TestFilter(t *testing.T) {
 	type args struct {
