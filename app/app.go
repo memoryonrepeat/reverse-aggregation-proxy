@@ -68,6 +68,7 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	skip := config.DefaultSkip
 	if len(req.URL.Query()["top"]) > 0 {
 		top, _ = strconv.Atoi(req.URL.Query()["top"][0])
+		// Avoid fetching negative ids to reduce traffic
 		if top < 0 {
 			top = 0
 		}
@@ -77,6 +78,7 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 	}
 	if len(req.URL.Query()["skip"]) > 0 {
 		skip, _ = strconv.Atoi(req.URL.Query()["skip"][0])
+		// Avoid fetching negative ids to reduce traffic
 		if skip < 0 {
 			skip = config.DefaultSkip
 		}
@@ -91,8 +93,8 @@ func AllRecipeHandler(req *http.Request, client *http.Client) []Recipe {
 }
 
 // Fetch recipes with given ids
+// To reduce traffic, only those with valid and positive ids are fetched
 func AggregatedRecipeHandler(req *http.Request, client *http.Client) []Recipe {
-	// ids := strings.Split(req.URL.Query()["ids"][0], ",")
 	ids := Filter(strings.Split(req.URL.Query()["ids"][0], ","), func(s string) bool {
 		val, _ := strconv.Atoi(s)
 		return val > 0
