@@ -7,3 +7,6 @@
 - Sort results
 #### Setup instruction:
 - `make rap`
+#### Todo:
+- Use sync.waitGroup for sync management
+- Auto retry option for those failed
